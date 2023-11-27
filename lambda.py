@@ -7,12 +7,9 @@ import sys
 from google.cloud import storage
 
 def lambda_handler(event, context):
-    # GitHub repository information
-    github_repo = "manicharan/demozip" 
-    github_token = "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"  
 
     # Google Cloud Storage information
-    gcs_bucket_name = "testbucket1269"
+    gcs_bucket_name = "bucket-for-lambda-f93b680"
 
     # AWS Lambda temporary directory
     temp_dir = '/tmp'
@@ -22,7 +19,7 @@ def lambda_handler(event, context):
         temp_download_dir = tempfile.mkdtemp(dir=temp_dir)
 
         # Get the URL for the latest code on the default branch
-        zipball_url = f'https://github.com/{github_repo}/archive/refs/heads/main.zip'
+        submission_url = "https://github.com/tparikh/myrepo/archive/refs/tags/v1.0.0.zip"
 
         sns_message = json.loads(event['Records'][0]['Sns']['Message'])
 
@@ -46,7 +43,7 @@ def lambda_handler(event, context):
         # Download the release ZIP file
         zip_file_path = os.path.join(temp_download_dir, 'release.zip')
         print(zip_file_path)
-        with requests.get(zipball_url, stream=True) as response:
+        with requests.get(submission_url, stream=True) as response:
             with open(zip_file_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
