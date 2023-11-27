@@ -1,0 +1,40 @@
+# .gitignore
+
+# Python
+__pycache__/
+
+# AWS Lambda
+lambda_function.zip
+
+# Dependencies
+bin/
+boto3/
+boto3-*.dist-info/
+botocore/
+botocore-*.dist-info/
+cachetools/
+certifi/
+charset_normalizer/
+dateutil/
+google/
+google_api_core-*.pth
+google_cloud_core-*.pth
+google_cloud_storage-*.pth
+google_crc32c/
+google_crc32c.libs/
+googleapis_common_protos-*.pth
+idna/
+jmespath/
+jmespath-*.dist-info/
+pyasn1/
+pyasn1_modules/
+python_dateutil-*.dist-info/
+requests/
+rsa/
+s3transfer/
+s3transfer-*.dist-info/
+six-*.dist-info/
+six.py
+urllib3/
+urllib3-*.dist-info/
+
