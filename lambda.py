@@ -5,6 +5,7 @@ import boto3
 import json
 import sys
 from google.cloud import storage
+import base64
 
 def lambda_handler(event, context):
 
@@ -23,14 +24,10 @@ def lambda_handler(event, context):
 
         print(f"Received SNS message - UserID: {userid}, Email: {email}, for Assignment: {assignmentid}")
 
-        secrets_manager = boto3.client('secretsmanager', region_name='us-east-1')
 
-        # Retrieve the secret value
-        response = secrets_manager.get_secret_value(SecretId='GoogleCloudAccessKey')
-        secret_content = json.loads(response['SecretString'])
-
-        # Set Application Default Credentials using the service account key
-        storage_client = storage.Client.from_service_account_info(secret_content)
+        service_account_key = os.environ['GOOGLE_SERVICE_ACCOUNT_KEY']# secrets_manager.get_secret_value(SecretId='GoogleCloudAccessKey')
+        decodedKey = base64.b64decode(service_account_key)
+        storage_client = storage.Client.from_service_account_info(json.loads(decodedKey))
 
         # Download the release ZIP file
         zip_file_path = os.path.join(temp_download_dir, 'release.zip')
