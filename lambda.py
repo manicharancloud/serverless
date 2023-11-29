@@ -6,6 +6,7 @@ import json
 import sys
 from google.cloud import storage
 from botocore.exceptions import NoCredentialsError
+from datetime import datetime
 import base64
 
 def lambda_handler(event, context):
@@ -16,9 +17,12 @@ def lambda_handler(event, context):
     email = sns_message.get('email')
     assignment_id = sns_message.get('assignment_id')
     attempt = sns_message.get('attempt')
+    submission_id = sns_message.get('submission_id')
     submission_url = sns_message.get('submission_url')
     senderEmailAddress = os.environ['SenderEmailAddress']
     region = os.environ['region']
+    dynamo_table_name = os.environ['dynamoDBTable']
+    timestamp = datetime.utcnow().isoformat()
     if is_valid_zip_url(submission_url):
         print(f"Received SNS message - for User: {email}, for Assignment: {assignment_id}")
         service_account_key = os.environ['GOOGLE_SERVICE_ACCOUNT_KEY']
@@ -35,16 +39,19 @@ def lambda_handler(event, context):
             path_in_bucket = f"{assignment_id}/{email}/attempt_{attempt}.zip"
             upload_to_gcs(zip_file_path, gcs_bucket_name,storage_client,path_in_bucket)
             send_email_ses(region,senderEmailAddress,email,"Submission Status",f"Submission for assignment {assignment_id} downloaded and stored successfully in google bucket {gcs_bucket_name} at path {path_in_bucket}")#and stored successfully in google bucket "+gcs_bucket_name+" at path "+assignment_id+"/"+email+"/attempt_"+attempt+".zip")
+            put_item_to_dynamodb(region,dynamo_table_name, email, submission_id, "Success", timestamp)
 
         except Exception as e:
             print(f"Error: {e}")
             send_email_ses(region,senderEmailAddress,email,"Submission Status",f"Could not download assignment due to the following error {e}, please re-submit")
+            put_item_to_dynamodb(region,dynamo_table_name, email, submission_id, "Failure", timestamp)
 
         finally:
             print("Here in finally! Cleaning up the tempDirectory")
             cleanup_temp_dir(temp_download_dir)
     else:
         send_email_ses(region,senderEmailAddress,email,"Submission Status","The submission failed due to invalid url, Please re-submit proper url")
+        put_item_to_dynamodb(region,dynamo_table_name, email, submission_id, "Failure", timestamp)
 
 def upload_to_gcs(source_path, bucket_name,storage_client, destination_blob_name):
 
@@ -78,6 +85,22 @@ def is_valid_zip_url(url):
     except Exception as e:
         print(f"Error checking URL validity: {e}")
         return False
+    
+def put_item_to_dynamodb(region,table_name, email, submission_id, status, timestamp):
+    dynamodb = boto3.client('dynamodb', region_name=region)
+    try:
+        response = dynamodb.put_item(
+            TableName=table_name,
+            Item={
+                'Email': {'S': email},
+                'Submission_id': {'S': submission_id},
+                'Status': {'S': status},
+                'Timestamp': {'S': timestamp}
+            }
+        )
+        print("Item added to DynamoDB:", response)
+    except NoCredentialsError as e:
+        print("Credentials not available. Unable to add item to DynamoDB.", e)
 
 def cleanup_temp_dir(temp_dir):
     if os.path.exists(temp_dir):
