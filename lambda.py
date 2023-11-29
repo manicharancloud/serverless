@@ -16,13 +16,15 @@ def lambda_handler(event, context):
         temp_download_dir = tempfile.mkdtemp(dir=temp_dir)
 
         sns_message = json.loads(event['Records'][0]['Sns']['Message'])
-        userid = sns_message.get('userid')
+        # userid = sns_message.get('userid')
+        status = sns_message.get('valid')
         email = sns_message.get('email')
         assignmentid = sns_message.get('assignmentid')
-        # submission_url = sns_message.get('submission_url')
-        submission_url = "https://github.com/tparikh/myrepo/archive/refs/tags/v1.0.0.zip"
+        attempt = sns_message.get('attempt')
+        submission_url = sns_message.get('submission_url')
+        # submission_url = "https://github.com/tparikh/myrepo/archive/refs/tags/v1.0.0.zip"
 
-        print(f"Received SNS message - UserID: {userid}, Email: {email}, for Assignment: {assignmentid}")
+        print(f"Received SNS message - for User: {email}, for Assignment: {assignmentid}")
 
 
         service_account_key = os.environ['GOOGLE_SERVICE_ACCOUNT_KEY']# secrets_manager.get_secret_value(SecretId='GoogleCloudAccessKey')
@@ -37,7 +39,7 @@ def lambda_handler(event, context):
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
 
-        upload_to_gcs(zip_file_path, gcs_bucket_name,storage_client, f"{assignmentid}/{userid}/submission.zip")
+        upload_to_gcs(zip_file_path, gcs_bucket_name,storage_client, f"{assignmentid}/{email}/attempt_{attempt}.zip")
 
     except Exception as e:
         print(f"Error: {e}")
