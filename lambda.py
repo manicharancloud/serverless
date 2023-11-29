@@ -17,6 +17,8 @@ def lambda_handler(event, context):
     assignment_id = sns_message.get('assignment_id')
     attempt = sns_message.get('attempt')
     submission_url = sns_message.get('submission_url')
+    senderEmailAddress = os.environ['SenderEmailAddress']
+    region = os.environ['region']
     if is_valid_zip_url(submission_url):
         print(f"Received SNS message - for User: {email}, for Assignment: {assignment_id}")
         service_account_key = os.environ['GOOGLE_SERVICE_ACCOUNT_KEY']
@@ -32,17 +34,17 @@ def lambda_handler(event, context):
 
             path_in_bucket = f"{assignment_id}/{email}/attempt_{attempt}.zip"
             upload_to_gcs(zip_file_path, gcs_bucket_name,storage_client,path_in_bucket)
-            send_email_ses("no-reply@dev.manicharanreddy.com",email,"Submission Status",f"Submission for assignment {assignment_id} downloaded and stored successfully in google bucket {gcs_bucket_name} at path {path_in_bucket}")#and stored successfully in google bucket "+gcs_bucket_name+" at path "+assignment_id+"/"+email+"/attempt_"+attempt+".zip")
+            send_email_ses(region,senderEmailAddress,email,"Submission Status",f"Submission for assignment {assignment_id} downloaded and stored successfully in google bucket {gcs_bucket_name} at path {path_in_bucket}")#and stored successfully in google bucket "+gcs_bucket_name+" at path "+assignment_id+"/"+email+"/attempt_"+attempt+".zip")
 
         except Exception as e:
             print(f"Error: {e}")
-            send_email_ses("no-reply@dev.manicharanreddy.com",email,"Submission Status",f"Could not download assignment due to the following error {e}, please re-submit")
+            send_email_ses(region,senderEmailAddress,email,"Submission Status",f"Could not download assignment due to the following error {e}, please re-submit")
 
         finally:
             print("Here in finally! Cleaning up the tempDirectory")
             cleanup_temp_dir(temp_download_dir)
     else:
-        send_email_ses("no-reply@dev.manicharanreddy.com",email,"Submission Status","The submission failed due to invalid url, Please re-submit proper url")
+        send_email_ses(region,senderEmailAddress,email,"Submission Status","The submission failed due to invalid url, Please re-submit proper url")
 
 def upload_to_gcs(source_path, bucket_name,storage_client, destination_blob_name):
 
@@ -51,8 +53,8 @@ def upload_to_gcs(source_path, bucket_name,storage_client, destination_blob_name
     print(f"uploading to bucket {bucket_name}")
     blob.upload_from_filename(source_path)
 
-def send_email_ses(sender, recipient, subject, body):
-    ses_client = boto3.client('ses', region_name='us-east-1')
+def send_email_ses(region,sender, recipient, subject, body):
+    ses_client = boto3.client('ses', region_name=region)
     print(f"Sending email to {recipient} from {sender}")
     try:
         response = ses_client.send_email(
