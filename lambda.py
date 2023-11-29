@@ -5,6 +5,7 @@ import boto3
 import json
 import sys
 from google.cloud import storage
+from botocore.exceptions import NoCredentialsError
 import base64
 
 def lambda_handler(event, context):
@@ -16,30 +17,27 @@ def lambda_handler(event, context):
         temp_download_dir = tempfile.mkdtemp(dir=temp_dir)
 
         sns_message = json.loads(event['Records'][0]['Sns']['Message'])
-        # userid = sns_message.get('userid')
-        status = sns_message.get('valid')
         email = sns_message.get('email')
-        assignmentid = sns_message.get('assignmentid')
+        assignment_id = sns_message.get('assignment_id')
         attempt = sns_message.get('attempt')
         submission_url = sns_message.get('submission_url')
-        # submission_url = "https://github.com/tparikh/myrepo/archive/refs/tags/v1.0.0.zip"
 
-        print(f"Received SNS message - for User: {email}, for Assignment: {assignmentid}")
+        print(f"Received SNS message - for User: {email}, for Assignment: {assignment_id}")
 
 
-        service_account_key = os.environ['GOOGLE_SERVICE_ACCOUNT_KEY']# secrets_manager.get_secret_value(SecretId='GoogleCloudAccessKey')
+        service_account_key = os.environ['GOOGLE_SERVICE_ACCOUNT_KEY']
         decodedKey = base64.b64decode(service_account_key)
         storage_client = storage.Client.from_service_account_info(json.loads(decodedKey))
 
-        # Download the release ZIP file
         zip_file_path = os.path.join(temp_download_dir, 'release.zip')
-        print(zip_file_path)
         with requests.get(submission_url, stream=True) as response:
             with open(zip_file_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
 
-        upload_to_gcs(zip_file_path, gcs_bucket_name,storage_client, f"{assignmentid}/{email}/attempt_{attempt}.zip")
+        path_in_bucket = f"{assignment_id}/{email}/attempt_{attempt}.zip"
+        upload_to_gcs(zip_file_path, gcs_bucket_name,storage_client,path_in_bucket)
+        send_email_ses("no-reply@dev.manicharanreddy.com",email,"Submission Status",f"Submission for assignment {assignment_id} downloaded and stored successfully in google bucket {gcs_bucket_name} at path {path_in_bucket}")#and stored successfully in google bucket "+gcs_bucket_name+" at path "+assignment_id+"/"+email+"/attempt_"+attempt+".zip")
 
     except Exception as e:
         print(f"Error: {e}")
@@ -52,8 +50,24 @@ def upload_to_gcs(source_path, bucket_name,storage_client, destination_blob_name
 
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
-    print("uploading to bucket")
+    print(f"uploading to bucket {bucket_name}")
     blob.upload_from_filename(source_path)
+
+def send_email_ses(sender, recipient, subject, body):
+    ses_client = boto3.client('ses', region_name='us-east-1')
+    print(f"Sending email to {recipient} from {sender}")
+    try:
+        response = ses_client.send_email(
+            Source=sender,
+            Destination={'ToAddresses': [recipient]},
+            Message={
+                'Subject': {'Data': subject},
+                'Body': {'Text': {'Data': body}}
+            }
+        )
+        print("Email sent! Message ID:", response['MessageId'],recipient)
+    except NoCredentialsError:
+        print("Credentials not available. Unable to send email.")
 
 def cleanup_temp_dir(temp_dir):
     if os.path.exists(temp_dir):
@@ -65,20 +79,6 @@ def cleanup_temp_dir(temp_dir):
                 dir_path = os.path.join(root, dir_name)
                 os.rmdir(dir_path)
         os.rmdir(temp_dir)
-
-# Uncomment to test locally
-
-# # Read the event from standard input
-# event_json = sys.stdin.read()
-
-# # Parse the JSON content of the event
-# event = json.loads(event_json)
-# userid = event.get('userid')
-# email = event.get('email')
-# assignmentid = event.get('assignmentid')
-
-# # Uncomment the following line for local testing
-# lambda_handler(event, None)
 
 
 
